@@ -52,6 +52,10 @@ function isStaticRoute(routePattern) {
  * @param {Function} triggerHandler - The trigger handler function.
  * @param {Object} fulfillmentController - The fulfillment controller.
  * @param {Object} importController - The import controller.
+ * @param {Object} apiKeyController - The API key controller.
+ * @param {Object} sitesAuditsToggleController - The sites audits controller.
+ * @param {Object} opportunitiesController - The opportunities controller.
+ * @param {Object} suggestionsController - The suggestions controller.
  * @return {{staticRoutes: {}, dynamicRoutes: {}}} - An object with static and dynamic routes.
  */
 export default function getRouteHandlers(
@@ -65,6 +69,10 @@ export default function getRouteHandlers(
   triggerHandler,
   fulfillmentController,
   importController,
+  apiKeyController,
+  sitesAuditsToggleController,
+  opportunitiesController,
+  suggestionsController,
 ) {
   const staticRoutes = {};
   const dynamicRoutes = {};
@@ -75,6 +83,7 @@ export default function getRouteHandlers(
     'GET /configurations/latest': configurationController.getLatest,
     'PUT /configurations/latest': configurationController.updateConfiguration,
     'GET /configurations/:version': configurationController.getByVersion,
+    'PATCH /configurations/sites/audits': sitesAuditsToggleController.execute,
     'POST /event/fulfillment': fulfillmentController.processFulfillmentEvents,
     'POST /hooks/site-detection/cdn/:hookSecret': hooksController.processCDNHook,
     'POST /hooks/site-detection/rum/:hookSecret': hooksController.processRUMHook,
@@ -94,25 +103,46 @@ export default function getRouteHandlers(
     'PATCH /sites/:siteId': sitesController.updateSite,
     'DELETE /sites/:siteId': sitesController.removeSite,
     'GET /sites/:siteId/audits': auditsController.getAllForSite,
+    'GET /sites/:siteId/audits/latest': auditsController.getAllLatestForSite,
     'GET /sites/:siteId/audits/:auditType': auditsController.getAllForSite,
     'GET /sites/:siteId/audits/:auditType/:auditedAt': sitesController.getAuditForSite,
     'PATCH /sites/:siteId/:auditType': auditsController.patchAuditForSite,
-    'GET /sites/:siteId/audits/latest': auditsController.getAllLatestForSite,
     'GET /sites/:siteId/latest-audit/:auditType': auditsController.getLatestForSite,
     'GET /sites/:siteId/experiments': experimentsController.getExperiments,
     'GET /sites/:siteId/key-events': sitesController.getKeyEventsBySiteID,
     'POST /sites/:siteId/key-events': sitesController.createKeyEvent,
     'DELETE /sites/:siteId/key-events/:keyEventId': sitesController.removeKeyEvent,
     'GET /sites/:siteId/metrics/:metric/:source': sitesController.getSiteMetricsBySource,
+    'GET /sites/:siteId/metrics/:metric/:source/by-url/:base64PageUrl': sitesController.getPageMetricsBySource,
+    'GET /sites/:siteId/latest-metrics': sitesController.getLatestSiteMetrics,
     'GET /sites/by-base-url/:baseURL': sitesController.getByBaseURL,
     'GET /sites/by-delivery-type/:deliveryType': sitesController.getAllByDeliveryType,
     'GET /sites/with-latest-audit/:auditType': sitesController.getAllWithLatestAudit,
+    'GET /sites/:siteId/opportunities': opportunitiesController.getAllForSite,
+    'GET /sites/:siteId/opportunities/by-status/:status': opportunitiesController.getByStatus,
+    'GET /sites/:siteId/opportunities/:opportunityId': opportunitiesController.getByID,
+    'POST /sites/:siteId/opportunities': opportunitiesController.createOpportunity,
+    'PATCH /sites/:siteId/opportunities/:opportunityId': opportunitiesController.patchOpportunity,
+    'DELETE /sites/:siteId/opportunities/:opportunityId': opportunitiesController.removeOpportunity,
+    'GET /sites/:siteId/opportunities/:opportunityId/suggestions': suggestionsController.getAllForOpportunity,
+    'GET /sites/:siteId/opportunities/:opportunityId/suggestions/by-status/:status': suggestionsController.getByStatus,
+    'GET /sites/:siteId/opportunities/:opportunityId/suggestions/:suggestionId': suggestionsController.getByID,
+    'POST /sites/:siteId/opportunities/:opportunityId/suggestions': suggestionsController.createSuggestions,
+    'PATCH /sites/:siteId/opportunities/:opportunityId/suggestions/status': suggestionsController.patchSuggestionsStatus,
+    'PATCH /sites/:siteId/opportunities/:opportunityId/suggestions/:suggestionId': suggestionsController.patchSuggestion,
+    'DELETE /sites/:siteId/opportunities/:opportunityId/suggestions/:suggestionId': suggestionsController.removeSuggestion,
     'GET /slack/events': slackController.handleEvent,
     'POST /slack/events': slackController.handleEvent,
     'POST /slack/channels/invite-by-user-id': slackController.inviteUserToChannel,
     'GET /trigger': triggerHandler,
+    'POST /tools/api-keys': apiKeyController.createApiKey,
+    'DELETE /tools/api-keys/:id': apiKeyController.deleteApiKey,
+    'GET /tools/api-keys': apiKeyController.getApiKeys,
     'POST /tools/import/jobs': importController.createImportJob,
     'GET /tools/import/jobs/:jobId': importController.getImportJobStatus,
+    'DELETE /tools/import/jobs/:jobId': importController.deleteImportJob,
+    'PATCH /tools/import/jobs/:jobId': importController.stopImportJob,
+    'GET /tools/import/jobs/:jobId/progress': importController.getImportJobProgress,
     'POST /tools/import/jobs/:jobId/result': importController.getImportJobResult,
     'GET /tools/import/jobs/by-date-range/:startDate/:endDate/all-jobs': importController.getImportJobsByDateRange,
   };

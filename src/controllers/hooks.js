@@ -13,39 +13,25 @@
 import wrap from '@adobe/helix-shared-wrap';
 import { Blocks, Elements, Message } from 'slack-block-builder';
 import {
-  badRequest,
-  internalServerError,
-  notFound,
-  ok,
+  badRequest, internalServerError, notFound, ok,
 } from '@adobe/spacecat-shared-http-utils';
 import {
-  composeBaseURL,
-  deepEqual,
-  hasText, isInteger,
-  isNonEmptyObject,
-  isObject,
+  composeBaseURL, deepEqual, hasText, isInteger, isNonEmptyObject, isObject, isValidUrl,
 } from '@adobe/spacecat-shared-utils';
+import yaml from 'js-yaml';
 
 import { BaseSlackClient, SLACK_TARGETS } from '@adobe/spacecat-shared-slack-client';
-import {
-  SITE_CANDIDATE_SOURCES,
-  SITE_CANDIDATE_STATUS,
-} from '@adobe/spacecat-shared-data-access/src/models/site-candidate.js';
-import { DELIVERY_TYPES } from '@adobe/spacecat-shared-data-access/src/models/site.js';
+import { Site as SiteModel, SiteCandidate as SiteCandidateModel } from '@adobe/spacecat-shared-data-access';
 import { fetch, isHelixSite } from '../support/utils.js';
 import { getHlxConfigMessagePart } from '../utils/slack/base.js';
 
 const CDN_HOOK_SECRET_NAME = 'INCOMING_WEBHOOK_SECRET_CDN';
-const RUM_HOOK_SECRET_NAME = 'INCOMING_WEBHOOK_SECRET_RUM';
 
 export const BUTTON_LABELS = {
   APPROVE_CUSTOMER: 'As Customer',
   APPROVE_FRIENDS_FAMILY: 'As Friends/Family',
   IGNORE: 'Ignore',
 };
-
-const IGNORED_DOMAINS = [/helix3.dev/, /fastly.net/, /ngrok-free.app/, /oastify.co/, /fastly-aem.page/, /findmy.media/, /impactful-[0-9]+\.site/, /shuyi-guan/, /adobevipthankyou/, /alshayauat/, /caseytokarchuk/];
-const IGNORED_SUBDOMAIN_TOKENS = ['demo', 'dev', 'stag', 'qa', '--', 'sitemap', 'test', 'preview', 'cm-verify', 'owa', 'mail', 'ssl', 'secure', 'publish'];
 
 class InvalidSiteCandidate extends Error {
   constructor(message, url) {
@@ -72,7 +58,7 @@ function errorHandler(fn, opts) {
       return await fn(context);
     } catch (e) {
       if (e instanceof InvalidSiteCandidate) {
-        log.warn(`Could not process site candidate. Reason: ${e.message}, Source: ${type}, Candidate: ${e.url}`);
+        log.info(`Could not process site candidate. Reason: ${e.message}, Source: ${type}, Candidate: ${e.url}`);
         return ok(`${type} site candidate disregarded`);
       }
       log.error(`Unexpected error while processing the ${type} site candidate`, e);
@@ -81,13 +67,13 @@ function errorHandler(fn, opts) {
   };
 }
 
-function isInvalidSubdomain(hostname) {
+function isInvalidSubdomain(config, hostname) {
   const subdomain = hostname.split('.').slice(0, -2).join('.');
-  return IGNORED_SUBDOMAIN_TOKENS.some((ignored) => subdomain.includes(ignored));
+  return config.ignoredSubdomainTokens.some((ignored) => subdomain.includes(ignored));
 }
 
-function isInvalidDomain(hostname) {
-  return IGNORED_DOMAINS.some((ignored) => hostname.match(ignored));
+function isInvalidDomain(config, hostname) {
+  return config.ignoredDomains.some((ignored) => hostname.match(ignored));
 }
 
 function isIPAddress(hostname) {
@@ -187,6 +173,32 @@ async function fetchHlxConfig(hlxConfig, hlxAdminToken, log) {
   return null;
 }
 
+async function getContentSource(hlxConfig, log) {
+  const { ref, site: repo, owner } = hlxConfig.rso;
+
+  const fstabResponse = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${ref}/fstab.yaml`);
+
+  if (fstabResponse.status !== 200) {
+    log.info(`Error fetching fstab.yaml for ${owner}/${repo}. Status: ${fstabResponse.status}`);
+    return null;
+  }
+
+  const fstabContent = await fstabResponse.text();
+  const parsedContent = yaml.load(fstabContent);
+
+  const url = parsedContent?.mountpoints
+    ? Object.entries(parsedContent.mountpoints)?.[0]?.[1]
+    : null;
+
+  if (!isValidUrl(url)) {
+    log.info(`No content source found for ${owner}/${repo} in fstab.yaml`);
+    return null;
+  }
+
+  const type = url.includes('drive.google') ? 'drive.google' : 'onedrive';
+  return { source: { type, url } };
+}
+
 /**
  * Extracts the hlx config from the given list of domains.
  * @param {string[]} domains - The list of domains (as extracted from the x-forwarded-host header)
@@ -215,6 +227,16 @@ async function extractHlxConfig(domains, hlxVersion, hlxAdminToken, log) {
         hlxConfig.content = content;
         hlxConfig.hlxVersion = 5;
         log.info(`HLX config found for ${rso.owner}/${rso.site}: ${JSON.stringify(config)}`);
+      } else {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          const content = await getContentSource(hlxConfig, log);
+          if (isObject(content)) {
+            hlxConfig.content = content;
+          }
+        } catch (e) {
+          log.error(`Error fetching fstab.yaml for ${rso.owner}/${rso.site}. Error: ${e.message}`);
+        }
       }
       break;
     }
@@ -223,7 +245,7 @@ async function extractHlxConfig(domains, hlxVersion, hlxAdminToken, log) {
   return hlxConfig;
 }
 
-function verifyURLCandidate(baseURL) {
+function verifyURLCandidate(config, baseURL) {
   const url = new URL(baseURL);
 
   // x-fw-host header should contain hostname only. If it contains path and/or search
@@ -238,18 +260,18 @@ function verifyURLCandidate(baseURL) {
   }
 
   // disregard the non-prod hostnames
-  if (isInvalidSubdomain(url.hostname)) {
+  if (isInvalidSubdomain(config, url.hostname)) {
     throw new InvalidSiteCandidate('URL most likely contains a non-prod domain', url.href);
   }
 
   // disregard unwanted domains
-  if (isInvalidDomain(url.hostname)) {
+  if (isInvalidDomain(config, url.hostname)) {
     throw new InvalidSiteCandidate('URL contains an unwanted domain', url.href);
   }
 }
 
 function buildSlackMessage(baseURL, source, hlxConfig, channel) {
-  const hlxConfigMessagePart = getHlxConfigMessagePart(source, hlxConfig);
+  const hlxConfigMessagePart = getHlxConfigMessagePart(hlxConfig);
   return Message()
     .channel(channel)
     .blocks(
@@ -274,6 +296,30 @@ function buildSlackMessage(baseURL, source, hlxConfig, channel) {
     .buildToObject();
 }
 
+const getConfigFromContext = (lambdaContext) => {
+  const {
+    env: {
+      HLX_ADMIN_TOKEN: hlxAdminToken,
+      SITE_DETECTION_IGNORED_DOMAINS: ignoredDomains = '',
+      SITE_DETECTION_IGNORED_SUBDOMAIN_TOKENS: ignoredSubdomainTokens = '',
+      SLACK_SITE_DISCOVERY_CHANNEL_INTERNAL: channel,
+    },
+  } = lambdaContext;
+
+  return {
+    channel,
+    hlxAdminToken,
+    ignoredDomains: ignoredDomains.split(',')
+      .map((domain) => {
+        const trimmedDomain = domain.trim();
+        const regexBody = trimmedDomain.startsWith('/') && trimmedDomain.endsWith('/') ? trimmedDomain.slice(1, -1) : trimmedDomain;
+        return new RegExp(regexBody);
+      }),
+    ignoredSubdomainTokens: ignoredSubdomainTokens.split(',')
+      .map((token) => token.trim()),
+  };
+};
+
 /**
  * Hooks controller. Provides methods to process incoming webhooks.
  * @returns {object} Hooks controller.
@@ -281,56 +327,60 @@ function buildSlackMessage(baseURL, source, hlxConfig, channel) {
  */
 function HooksController(lambdaContext) {
   const { dataAccess } = lambdaContext;
+  const { Site, SiteCandidate } = dataAccess;
+  const config = getConfigFromContext(lambdaContext);
 
-  async function processSiteCandidate(domain, source, log, hlxConfig = {}) {
+  async function processSiteCandidate(domain, source, log, overrideHelixCheck, hlxConfig = {}) {
     const baseURL = composeBaseURL(domain);
-    verifyURLCandidate(baseURL);
-    await verifyHelixSite(baseURL, hlxConfig);
+    verifyURLCandidate(config, baseURL);
+    if (!overrideHelixCheck) {
+      await verifyHelixSite(baseURL, hlxConfig);
+    }
 
     const siteCandidate = {
       baseURL,
       source,
-      status: SITE_CANDIDATE_STATUS.PENDING,
+      status: SiteCandidateModel.SITE_CANDIDATE_STATUS.PENDING,
       hlxConfig,
     };
 
-    const site = await dataAccess.getSiteByBaseURL(siteCandidate.baseURL);
+    const site = await Site.findByBaseURL(siteCandidate.baseURL);
 
     // discard the site candidate if the site exists in sites db with deliveryType=aem_edge
-    if (site && site.getDeliveryType() === DELIVERY_TYPES.AEM_EDGE) {
+    if (site && site.getDeliveryType() === SiteModel.DELIVERY_TYPES.AEM_EDGE) {
       // for existing site with empty hlxConfig or non-equal hlxConfig, update it now
       // todo: remove after back fill of hlx config for existing sites is complete
-      if (source === SITE_CANDIDATE_SOURCES.CDN && isNonEmptyObject(hlxConfig)) {
+      if (source === SiteCandidateModel.SITE_CANDIDATE_SOURCES.CDN && isNonEmptyObject(hlxConfig)) {
         const siteHlxConfig = site.getHlxConfig();
         const siteHasHlxConfig = isNonEmptyObject(siteHlxConfig);
         const candidateHlxConfig = siteCandidate.hlxConfig;
         const hlxConfigChanged = !deepEqual(siteHlxConfig, candidateHlxConfig);
 
         if (hlxConfigChanged) {
-          site.updateHlxConfig(siteCandidate.hlxConfig);
-          await dataAccess.updateSite(site);
+          site.setHlxConfig(siteCandidate.hlxConfig);
+          await site.save();
 
           const action = siteHasHlxConfig && hlxConfigChanged ? 'updated' : 'added';
-          log.info(`HLX config ${action} for existing site: *<${baseURL}|${baseURL}>*${getHlxConfigMessagePart(SITE_CANDIDATE_SOURCES.CDN, hlxConfig)}`);
+          log.info(`HLX config ${action} for existing site: *<${baseURL}|${baseURL}>*${getHlxConfigMessagePart(hlxConfig)}`);
         }
       }
       throw new InvalidSiteCandidate('Site candidate already exists in sites db', baseURL);
     }
 
     // discard the site candidate if previously evaluated
-    if (!site && (await dataAccess.siteCandidateExists(siteCandidate.baseURL))) {
+    const isPreviouslyEvaluated = await SiteCandidate.findByBaseURL(siteCandidate.baseURL);
+    if (isPreviouslyEvaluated !== null) {
       throw new InvalidSiteCandidate('Site candidate previously evaluated', baseURL);
     }
 
-    await dataAccess.upsertSiteCandidate(siteCandidate);
+    await SiteCandidate.create(siteCandidate);
 
     return baseURL;
   }
 
   async function sendDiscoveryMessage(baseURL, source, hlxConfig = {}) {
-    const { SLACK_SITE_DISCOVERY_CHANNEL_INTERNAL: channel } = lambdaContext.env;
     const slackClient = BaseSlackClient.createFrom(lambdaContext, SLACK_TARGETS.WORKSPACE_INTERNAL);
-    return slackClient.postMessage(buildSlackMessage(baseURL, source, hlxConfig, channel));
+    return slackClient.postMessage(buildSlackMessage(baseURL, source, hlxConfig, config.channel));
   }
 
   async function processCDNHook(context) {
@@ -338,8 +388,10 @@ function HooksController(lambdaContext) {
 
     log.info(`Processing CDN site candidate. Input: ${JSON.stringify(context.data)}`);
 
-    // eslint-disable-next-line camelcase,no-unused-vars
-    const { hlxVersion, requestPath, requestXForwardedHost } = context.data;
+    const {
+      // eslint-disable-next-line camelcase,no-unused-vars
+      hlxVersion, requestPath, requestXForwardedHost, overrideHelixCheck,
+    } = context.data;
 
     if (!isInteger(hlxVersion)) {
       log.warn('HLX version is not an integer. Skipping processing CDN site candidate');
@@ -351,41 +403,24 @@ function HooksController(lambdaContext) {
       return badRequest('X-Forwarded-Host header is missing');
     }
 
-    const { HLX_ADMIN_TOKEN: hlxAdminToken } = context.env;
     const domains = requestXForwardedHost.split(',').map((domain) => domain.trim());
     const primaryDomain = domains[0];
 
     // extract the url from the x-forwarded-host header and determine hlx config
-    const hlxConfig = await extractHlxConfig(domains, hlxVersion, hlxAdminToken, log);
+    const hlxConfig = await extractHlxConfig(domains, hlxVersion, config.hlxAdminToken, log);
 
     const domain = hlxConfig.cdn?.prod?.host || primaryDomain;
-    const source = SITE_CANDIDATE_SOURCES.CDN;
-    const baseURL = await processSiteCandidate(domain, source, log, hlxConfig);
+    const source = SiteCandidateModel.SITE_CANDIDATE_SOURCES.CDN;
+    const baseURL = await processSiteCandidate(domain, source, log, overrideHelixCheck, hlxConfig);
     await sendDiscoveryMessage(baseURL, source, hlxConfig);
 
     return ok('CDN site candidate is successfully processed');
-  }
-
-  async function processRUMHook(context) {
-    const { log } = context;
-    const { domain } = context.data;
-
-    log.info(`Processing RUM site candidate. Input: ${JSON.stringify(context.data)}`);
-
-    const source = SITE_CANDIDATE_SOURCES.RUM;
-    const baseURL = await processSiteCandidate(domain, source, log);
-    await sendDiscoveryMessage(baseURL, source);
-
-    return ok('RUM site candidate is successfully processed');
   }
 
   return {
     processCDNHook: wrap(processCDNHook)
       .with(errorHandler, { type: 'CDN' })
       .with(hookAuth, { secretName: CDN_HOOK_SECRET_NAME }),
-    processRUMHook: wrap(processRUMHook)
-      .with(errorHandler, { type: 'RUM' })
-      .with(hookAuth, { secretName: RUM_HOOK_SECRET_NAME }),
   };
 }
 

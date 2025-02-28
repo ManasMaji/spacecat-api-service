@@ -43,6 +43,7 @@ import SitesController from './controllers/sites.js';
 import ExperimentsController from './controllers/experiments.js';
 import HooksController from './controllers/hooks.js';
 import SlackController from './controllers/slack.js';
+import SitesAuditsToggleController from './controllers/sites-audits-toggle.js';
 import trigger from './controllers/trigger.js';
 
 // prevents webpack build error
@@ -51,6 +52,10 @@ import ConfigurationController from './controllers/configuration.js';
 import FulfillmentController from './controllers/event/fulfillment.js';
 import ImportController from './controllers/import.js';
 import { s3ClientWrapper } from './support/s3.js';
+import { multipartFormData } from './support/multipart-form-data.js';
+import ApiKeyController from './controllers/api-key.js';
+import OpportunitiesController from './controllers/opportunities.js';
+import SuggestionsController from './controllers/suggestions.js';
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -88,12 +93,16 @@ async function run(request, context) {
       ConfigurationController(context.dataAccess),
       HooksController(context),
       OrganizationsController(context.dataAccess, context.env),
-      SitesController(context.dataAccess, log),
+      SitesController(context.dataAccess, log, context.env),
       ExperimentsController(context.dataAccess),
       SlackController(SlackApp),
       trigger,
       FulfillmentController(context),
       ImportController(context),
+      ApiKeyController(context),
+      SitesAuditsToggleController(context.dataAccess),
+      OpportunitiesController(context.dataAccess),
+      SuggestionsController(context.dataAccess),
     );
 
     const routeMatch = matchPath(method, suffix, routeHandlers);
@@ -127,8 +136,9 @@ const { WORKSPACE_EXTERNAL } = SLACK_TARGETS;
 export const main = wrap(run)
   .with(authWrapper, { authHandlers: [LegacyApiKeyHandler, ScopedApiKeyHandler, AdobeImsHandler] })
   .with(dataAccess)
-  .with(enrichPathInfo)
   .with(bodyData)
+  .with(multipartFormData)
+  .with(enrichPathInfo)
   .with(sqs)
   .with(s3ClientWrapper)
   .with(imsClientWrapper)

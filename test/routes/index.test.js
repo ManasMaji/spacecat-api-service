@@ -70,7 +70,37 @@ describe('getRouteHandlers', () => {
     createImportJob: sinon.stub(),
     getImportJobStatus: sinon.stub(),
     getImportJobResult: sinon.stub(),
+    getImportJobProgress: sinon.stub(),
     getImportJobsByDateRange: sinon.stub(),
+    stopImportJob: sinon.stub(),
+  };
+
+  const mockApiKeyController = {
+    createApiKey: sinon.stub(),
+    deleteApiKey: sinon.stub(),
+    getApiKeys: sinon.stub(),
+  };
+
+  const mockSitesAuditsToggleController = {
+    execute: sinon.stub(),
+  };
+
+  const mockOpportunitiesController = {
+    getAllForSite: sinon.stub(),
+    getByStatus: sinon.stub(),
+    getBySiteId: sinon.stub(),
+    createOpportunity: sinon.stub(),
+    patchOpportunity: sinon.stub(),
+    removeOpportunity: sinon.stub(),
+  };
+
+  const mockSuggestionsController = {
+    getAllForOpportunity: sinon.stub(),
+    getByStatus: sinon.stub(),
+    getByID: sinon.stub(),
+    createSuggestions: sinon.stub(),
+    patchSuggestion: sinon.stub(),
+    patchSuggestionsStatus: sinon.stub(),
   };
 
   it('segregates static and dynamic routes', () => {
@@ -85,12 +115,17 @@ describe('getRouteHandlers', () => {
       mockTrigger,
       mockFulfillmentController,
       mockImportController,
+      mockApiKeyController,
+      mockSitesAuditsToggleController,
+      mockOpportunitiesController,
+      mockSuggestionsController,
     );
 
     expect(staticRoutes).to.have.all.keys(
       'GET /configurations',
       'GET /configurations/latest',
       'PUT /configurations/latest',
+      'PATCH /configurations/sites/audits',
       'GET /organizations',
       'POST /organizations',
       'GET /sites',
@@ -102,12 +137,15 @@ describe('getRouteHandlers', () => {
       'GET /trigger',
       'POST /event/fulfillment',
       'POST /slack/channels/invite-by-user-id',
+      'POST /tools/api-keys',
+      'GET /tools/api-keys',
       'POST /tools/import/jobs',
     );
 
     expect(staticRoutes['GET /configurations']).to.equal(mockConfigurationController.getAll);
     expect(staticRoutes['GET /configurations/latest']).to.equal(mockConfigurationController.getLatest);
     expect(staticRoutes['PUT /configurations/latest']).to.equal(mockConfigurationController.updateConfiguration);
+    expect(staticRoutes['PATCH /configurations/sites/audits']).to.equal(mockSitesAuditsToggleController.execute);
     expect(staticRoutes['GET /organizations']).to.equal(mockOrganizationsController.getAll);
     expect(staticRoutes['POST /organizations']).to.equal(mockOrganizationsController.createOrganization);
     expect(staticRoutes['GET /sites']).to.equal(mockSitesController.getAll);
@@ -115,6 +153,8 @@ describe('getRouteHandlers', () => {
     expect(staticRoutes['GET /sites.csv']).to.equal(mockSitesController.getAllAsCsv);
     expect(staticRoutes['GET /sites.xlsx']).to.equal(mockSitesController.getAllAsExcel);
     expect(staticRoutes['GET /trigger']).to.equal(mockTrigger);
+    expect(staticRoutes['POST /tools/api-keys']).to.equal(mockApiKeyController.createApiKey);
+    expect(staticRoutes['GET /tools/api-keys']).to.equal(mockApiKeyController.getApiKeys);
 
     expect(dynamicRoutes).to.have.all.keys(
       'GET /audits/latest/:auditType',
@@ -139,14 +179,33 @@ describe('getRouteHandlers', () => {
       'PATCH /sites/:siteId/:auditType',
       'GET /sites/:siteId/audits/latest',
       'GET /sites/:siteId/latest-audit/:auditType',
+      'GET /sites/:siteId/latest-metrics',
       'GET /sites/:siteId/experiments',
       'GET /sites/:siteId/key-events',
       'POST /sites/:siteId/key-events',
       'DELETE /sites/:siteId/key-events/:keyEventId',
       'GET /sites/:siteId/metrics/:metric/:source',
+      'GET /sites/:siteId/metrics/:metric/:source/by-url/:base64PageUrl',
+      'DELETE /tools/api-keys/:id',
       'GET /tools/import/jobs/:jobId',
+      'PATCH /tools/import/jobs/:jobId',
       'POST /tools/import/jobs/:jobId/result',
+      'GET /tools/import/jobs/:jobId/progress',
       'GET /tools/import/jobs/by-date-range/:startDate/:endDate/all-jobs',
+      'DELETE /tools/import/jobs/:jobId',
+      'GET /sites/:siteId/opportunities',
+      'GET /sites/:siteId/opportunities/by-status/:status',
+      'GET /sites/:siteId/opportunities/:opportunityId',
+      'POST /sites/:siteId/opportunities',
+      'PATCH /sites/:siteId/opportunities/:opportunityId',
+      'DELETE /sites/:siteId/opportunities/:opportunityId',
+      'GET /sites/:siteId/opportunities/:opportunityId/suggestions',
+      'GET /sites/:siteId/opportunities/:opportunityId/suggestions/by-status/:status',
+      'GET /sites/:siteId/opportunities/:opportunityId/suggestions/:suggestionId',
+      'POST /sites/:siteId/opportunities/:opportunityId/suggestions',
+      'PATCH /sites/:siteId/opportunities/:opportunityId/suggestions/:suggestionId',
+      'DELETE /sites/:siteId/opportunities/:opportunityId/suggestions/:suggestionId',
+      'PATCH /sites/:siteId/opportunities/:opportunityId/suggestions/status',
     );
 
     expect(dynamicRoutes['GET /audits/latest/:auditType'].handler).to.equal(mockAuditsController.getAllLatest);
@@ -179,5 +238,31 @@ describe('getRouteHandlers', () => {
     expect(dynamicRoutes['GET /sites/:siteId/latest-audit/:auditType'].handler).to.equal(mockAuditsController.getLatestForSite);
     expect(dynamicRoutes['GET /sites/:siteId/latest-audit/:auditType'].paramNames).to.deep.equal(['siteId', 'auditType']);
     expect(dynamicRoutes['GET /sites/:siteId/experiments'].handler).to.equal(mockExperimentsController.getExperiments);
+    expect(dynamicRoutes['DELETE /tools/api-keys/:id'].handler).to.equal(mockApiKeyController.deleteApiKey);
+    expect(dynamicRoutes['GET /sites/:siteId/opportunities'].handler).to.equal(mockOpportunitiesController.getAllForSite);
+    expect(dynamicRoutes['GET /sites/:siteId/opportunities'].paramNames).to.deep.equal(['siteId']);
+    expect(dynamicRoutes['GET /sites/:siteId/opportunities/by-status/:status'].handler).to.equal(mockOpportunitiesController.getByStatus);
+    expect(dynamicRoutes['GET /sites/:siteId/opportunities/by-status/:status'].paramNames).to.deep.equal(['siteId', 'status']);
+    expect(dynamicRoutes['GET /sites/:siteId/opportunities/:opportunityId'].handler).to.equal(mockOpportunitiesController.getByID);
+    expect(dynamicRoutes['GET /sites/:siteId/opportunities/:opportunityId'].paramNames).to.deep.equal(['siteId', 'opportunityId']);
+    expect(dynamicRoutes['POST /sites/:siteId/opportunities'].handler).to.equal(mockOpportunitiesController.createOpportunity);
+    expect(dynamicRoutes['POST /sites/:siteId/opportunities'].paramNames).to.deep.equal(['siteId']);
+    expect(dynamicRoutes['PATCH /sites/:siteId/opportunities/:opportunityId'].handler).to.equal(mockOpportunitiesController.patchOpportunity);
+    expect(dynamicRoutes['PATCH /sites/:siteId/opportunities/:opportunityId'].paramNames).to.deep.equal(['siteId', 'opportunityId']);
+    expect(dynamicRoutes['DELETE /sites/:siteId/opportunities/:opportunityId'].handler).to.equal(mockOpportunitiesController.removeOpportunity);
+    expect(dynamicRoutes['DELETE /sites/:siteId/opportunities/:opportunityId'].paramNames).to.deep.equal(['siteId', 'opportunityId']);
+    expect(dynamicRoutes['GET /sites/:siteId/opportunities/:opportunityId/suggestions'].handler).to.equal(mockSuggestionsController.getAllForOpportunity);
+    expect(dynamicRoutes['GET /sites/:siteId/opportunities/:opportunityId/suggestions'].paramNames).to.deep.equal(['siteId', 'opportunityId']);
+    expect(dynamicRoutes['GET /sites/:siteId/opportunities/:opportunityId/suggestions/by-status/:status'].handler).to.equal(mockSuggestionsController.getByStatus);
+    expect(dynamicRoutes['GET /sites/:siteId/opportunities/:opportunityId/suggestions/by-status/:status'].paramNames).to.deep.equal(['siteId', 'opportunityId', 'status']);
+    expect(dynamicRoutes['GET /sites/:siteId/opportunities/:opportunityId/suggestions/:suggestionId'].handler).to.equal(mockSuggestionsController.getByID);
+    expect(dynamicRoutes['GET /sites/:siteId/opportunities/:opportunityId/suggestions/:suggestionId'].paramNames).to.deep.equal(['siteId', 'opportunityId', 'suggestionId']);
+    expect(dynamicRoutes['POST /sites/:siteId/opportunities/:opportunityId/suggestions'].handler).to.equal(mockSuggestionsController.createSuggestions);
+    expect(dynamicRoutes['PATCH /sites/:siteId/opportunities/:opportunityId/suggestions/:suggestionId'].handler).to.equal(mockSuggestionsController.patchSuggestion);
+    expect(dynamicRoutes['PATCH /sites/:siteId/opportunities/:opportunityId/suggestions/:suggestionId'].paramNames).to.deep.equal(['siteId', 'opportunityId', 'suggestionId']);
+    expect(dynamicRoutes['DELETE /sites/:siteId/opportunities/:opportunityId/suggestions/:suggestionId'].handler).to.equal(mockSuggestionsController.removeSuggestion);
+    expect(dynamicRoutes['DELETE /sites/:siteId/opportunities/:opportunityId/suggestions/:suggestionId'].paramNames).to.deep.equal(['siteId', 'opportunityId', 'suggestionId']);
+    expect(dynamicRoutes['PATCH /sites/:siteId/opportunities/:opportunityId/suggestions/status'].handler).to.equal(mockSuggestionsController.patchSuggestionsStatus);
+    expect(dynamicRoutes['PATCH /sites/:siteId/opportunities/:opportunityId/suggestions/status'].paramNames).to.deep.equal(['siteId', 'opportunityId']);
   });
 });

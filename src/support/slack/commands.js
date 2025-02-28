@@ -18,8 +18,13 @@ import getSites from './commands/get-sites.js';
 import martechImpact from './commands/martech-impact.js';
 import runAudit from './commands/run-audit.js';
 import runImport from './commands/run-import.js';
+import runScrape from './commands/run-scrape.js';
 import setLiveStatus from './commands/set-live-status.js';
+import getGoogleLink from './commands/create-google-link.js';
 import help from './commands/help.js';
+import toggleSiteAudit from './commands/toggle-site-audit.js';
+import onboard from './commands/onboard.js';
+import setSiteOrganizationCommand from './commands/set-ims-org.js';
 
 /**
  * Returns all commands.
@@ -36,6 +41,11 @@ export default (context) => [
   martechImpact(context),
   runAudit(context),
   runImport(context),
+  runScrape(context),
   setLiveStatus(context),
+  getGoogleLink(context),
   help(context),
+  toggleSiteAudit(context),
+  onboard(context),
+  setSiteOrganizationCommand(context),
 ];

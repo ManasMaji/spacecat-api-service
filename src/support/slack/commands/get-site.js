@@ -61,14 +61,14 @@ export function formatAudits(audits) {
       performance, seo, accessibility, 'best-practices': bestPractices,
     } = audit.getScores();
 
-    if (!audit.isError()) {
+    if (!audit.getIsError()) {
       return [
         formatDate(audit.getAuditedAt()),
         formatScore(performance),
         formatScore(seo),
         formatScore(accessibility),
         formatScore(bestPractices),
-        audit.isLive() ? 'Yes' : 'No',
+        audit.getIsLive() ? 'Yes' : 'No',
       ];
     } else {
       return [
@@ -102,6 +102,7 @@ function GetSiteCommand(context) {
   });
 
   const { dataAccess, log } = context;
+  const { Configuration, Site } = dataAccess;
 
   /**
    * Executes the GetSiteCommand. Retrieves the audit status for a site by
@@ -127,20 +128,23 @@ function GetSiteCommand(context) {
         return;
       }
 
-      const site = await dataAccess.getSiteByBaseURL(baseURL);
+      const site = await Site.findByBaseURL(baseURL);
 
       if (!site) {
         await postSiteNotFoundMessage(say, baseURL);
         return;
       }
 
-      const audits = await dataAccess.getAuditsForSite(site.getId(), `lhs-${psiStrategy}`, false);
+      const auditType = `lhs-${psiStrategy}`;
+      const audits = await site.getAuditsByAuditType(auditType);
+      const configuration = await Configuration.findLatest();
+      const isAuditEnabled = configuration.isHandlerEnabledForSite(auditType, site);
       const latestAudit = audits.length > 0 ? audits[0] : null;
 
       const textSections = [{
         text: `
 *Site Status for ${site.getBaseURL()}*
-${printSiteDetails(site, psiStrategy, latestAudit)}
+${printSiteDetails(site, isAuditEnabled, psiStrategy, latestAudit)}
 
 _Audits of *${psiStrategy}* strategy, sorted by date descending:_
 ${formatAudits(audits)}

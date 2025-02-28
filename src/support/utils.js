@@ -10,7 +10,9 @@
  * governing permissions and limitations under the License.
  */
 import { context as h2, h1 } from '@adobe/fetch';
-import { DELIVERY_TYPES } from '@adobe/spacecat-shared-data-access/src/models/site.js';
+import { Site as SiteModel } from '@adobe/spacecat-shared-data-access';
+import URI from 'urijs';
+import { hasText } from '@adobe/spacecat-shared-utils';
 
 /* c8 ignore next 3 */
 export const { fetch } = process.env.HELIX_FETCH_FORCE_HTTP1
@@ -47,7 +49,7 @@ export const sendAuditMessage = async (
   type,
   auditContext,
   siteId,
-) => sqs.sendMessage(queueUrl, { type, url: siteId, auditContext });
+) => sqs.sendMessage(queueUrl, { type, siteId, auditContext });
 
 // todo: prototype - untested
 /* c8 ignore start */
@@ -62,6 +64,19 @@ export const sendExperimentationCandidatesMessage = async (
   slackContext,
 });
 /* c8 ignore end */
+
+export const sentRunScraperMessage = async (
+  sqs,
+  queueUrl,
+  jobId,
+  urls,
+  slackContext,
+) => sqs.sendMessage(queueUrl, {
+  processingType: 'default',
+  jobId,
+  urls: [...urls],
+  slackContext,
+});
 
 // todo: prototype - untested
 /* c8 ignore start */
@@ -149,6 +164,21 @@ export const triggerExperimentationCandidates = async (
 );
 /* c8 ignore end */
 
+export const triggerScraperRun = async (
+  jobId,
+  urls,
+  slackContext,
+  lambdaContext,
+) => sentRunScraperMessage(
+  lambdaContext.sqs,
+  lambdaContext.env.SCRAPING_JOBS_QUEUE_URL,
+  jobId,
+  urls,
+  {
+    channelId: slackContext.channelId,
+    threadTs: slackContext.threadTs,
+  },
+);
 // todo: prototype - untested
 /* c8 ignore start */
 export const triggerImportRun = async (
@@ -191,7 +221,7 @@ export const triggerImportRun = async (
 export async function isHelixSite(url, edgeConfig = {}) {
   let resp;
   try {
-    resp = await fetch(url);
+    resp = await fetch(url, { headers: { 'User-Agent': 'curl/7.88.1' } });
   } catch (e) {
     return {
       isHelix: false,
@@ -254,15 +284,15 @@ export async function isAEMSite(url) {
 export async function findDeliveryType(url) {
   const { isHelix } = await isHelixSite(url);
   if (isHelix) {
-    return DELIVERY_TYPES.AEM_EDGE;
+    return SiteModel.DELIVERY_TYPES.AEM_EDGE;
   }
 
   const { isAEM } = await isAEMSite(url);
   if (isAEM) {
-    return DELIVERY_TYPES.AEM_CS;
+    return SiteModel.DELIVERY_TYPES.AEM_CS;
   }
 
-  return DELIVERY_TYPES.OTHER;
+  return SiteModel.DELIVERY_TYPES.OTHER;
 }
 
 /**
@@ -275,3 +305,9 @@ export class ErrorWithStatusCode extends Error {
     this.status = status;
   }
 }
+
+export const wwwUrlResolver = (site) => {
+  const baseURL = site.getBaseURL();
+  const uri = new URI(baseURL);
+  return hasText(uri.subdomain()) ? baseURL.replace(/https?:\/\//, '') : baseURL.replace(/https?:\/\//, 'www.');
+};

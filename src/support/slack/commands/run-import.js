@@ -22,29 +22,9 @@ import {
   postErrorMessage,
   postSiteNotFoundMessage,
 } from '../../../utils/slack/base.js';
+import { isValidDateInterval } from '../../../utils/date-utils.js';
 
 const PHRASES = ['run import'];
-
-function isValidDateInterval(startDate, endDate) {
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRegex.test(startDate)) {
-    return false;
-  }
-  if (!dateRegex.test(endDate)) {
-    return false;
-  }
-  const parsedStartDate = new Date(startDate);
-  if (Number.isNaN(parsedStartDate.getTime())) {
-    return false;
-  }
-  const parsedEndDate = new Date(endDate);
-  if (Number.isNaN(parsedEndDate.getTime())) {
-    return false;
-  }
-
-  return parsedStartDate < parsedEndDate
-    && (parsedEndDate - parsedStartDate) <= 1000 * 60 * 60 * 24 * 365 * 2; // 2 years
-}
 
 /**
  * Factory function to create the RunImportCommand object.
@@ -66,6 +46,7 @@ function RunImportCommand(context) {
   });
 
   const { dataAccess, log } = context;
+  const { Configuration, Site } = dataAccess;
 
   /**
    * Validates input and triggers a new import run for the given site.
@@ -76,14 +57,18 @@ function RunImportCommand(context) {
    * @returns {Promise} A promise that resolves when the operation is complete.
    */
   const handleExecution = async (args, slackContext) => {
-    const { say, user } = slackContext;
+    const { say } = slackContext;
 
-    const admins = JSON.parse(context?.env?.SLACK_IDS_RUN_IMPORT || '[]');
+    const config = await Configuration.findLatest();
+    /* todo: uncomment after summit and back-office-UI support for configuration setting (roles)
+    const slackRoles = config.getSlackRoles() || {};
+    const admins = slackRoles?.import || [];
 
     if (!admins.includes(user)) {
-      await say(':error: Only selected SpaceCat fluid team members can run imports.');
+      await say(':error: Only members of role "import" can run this command.');
       return;
     }
+    */
 
     try {
       const [importType, baseURLInput, startDate, endDate] = args;
@@ -101,7 +86,6 @@ function RunImportCommand(context) {
         return;
       }
 
-      const config = await dataAccess.getConfiguration();
       const jobConfig = config.getJobs().filter((job) => job.group === 'imports' && job.type === importType);
 
       if (!Array.isArray(jobConfig) || jobConfig.length === 0) {
@@ -110,7 +94,7 @@ function RunImportCommand(context) {
         return;
       }
 
-      const site = await dataAccess.getSiteByBaseURL(baseURL);
+      const site = await Site.findByBaseURL(baseURL);
       if (!isObject(site)) {
         await postSiteNotFoundMessage(say, baseURL);
         return;
@@ -126,7 +110,7 @@ function RunImportCommand(context) {
         context,
       );
 
-      const message = `:adobe-run: Triggered import run of type ${importType} for site \`${baseURL}\` and interval ${startDate}-${endDate}\n`;
+      const message = `:adobe-run: Triggered import run of type ${importType} for site \`${baseURL}\`${startDate && endDate ? ` and interval ${startDate}-${endDate}` : ''}\n`;
       // message += 'Stand by for results. I will post them here when they are ready.';
 
       await say(message);
