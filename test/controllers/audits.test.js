@@ -409,9 +409,11 @@ describe('Audits Controller', () => {
         ...handlerTypeConfig,
         getHandlerConfig: (type) => ({ [type]: {} }),
         getSlackConfig: () => {},
+        getContentAiConfig: () => {},
         getImports: () => [],
         getHandlers: () => (({ [auditType]: {} })),
         getFetchConfig: () => {},
+        getBrandConfig: () => ({ brandId: 'test-brand' }),
       });
 
       const result = await auditsController.patchAuditForSite(context);
@@ -443,9 +445,11 @@ describe('Audits Controller', () => {
         ...handlerTypeConfig,
         getHandlerConfig: (type) => ({ [type]: handlerTypeConfig }),
         getSlackConfig: () => {},
+        getContentAiConfig: () => {},
         getHandlers: () => (({ [auditType]: {} })),
         getImports: () => [],
         getFetchConfig: () => {},
+        getBrandConfig: () => ({ brandId: 'test-brand' }),
       });
 
       const result = await auditsController.patchAuditForSite(context);
@@ -478,9 +482,11 @@ describe('Audits Controller', () => {
         ...handlerTypeConfig,
         getHandlerConfig: (type) => ({ [type]: handlerTypeConfig }),
         getSlackConfig: () => {},
+        getContentAiConfig: () => {},
         getHandlers: () => (({ [auditType]: {} })),
         getImports: () => [],
         getFetchConfig: () => {},
+        getBrandConfig: () => ({ brandId: 'test-brand' }),
       });
 
       const result = await auditsController.patchAuditForSite(context);
@@ -516,9 +522,11 @@ describe('Audits Controller', () => {
         ...handlerTypeConfig,
         getHandlerConfig: (type) => ({ [type]: handlerTypeConfig }),
         getSlackConfig: () => {},
+        getContentAiConfig: () => {},
         getHandlers: () => (({ [auditType]: {} })),
         getImports: () => [],
         getFetchConfig: () => {},
+        getBrandConfig: () => ({ brandId: 'test-brand' }),
       });
 
       const result = await auditsController.patchAuditForSite(context);
@@ -595,9 +603,11 @@ describe('Audits Controller', () => {
         ...handlerTypeConfig,
         getHandlerConfig: (type) => ({ [type]: handlerTypeConfig }),
         getSlackConfig: () => {},
+        getContentAiConfig: () => {},
         getHandlers: () => (({ [auditType]: {} })),
         getImports: () => [],
         getFetchConfig: () => {},
+        getBrandConfig: () => ({ brandId: 'test-brand' }),
       });
 
       const result = await auditsController.patchAuditForSite(context);
@@ -634,9 +644,11 @@ describe('Audits Controller', () => {
         ...handlerTypeConfig,
         getHandlerConfig: (type) => ({ [type]: handlerTypeConfig }),
         getSlackConfig: () => {},
+        getContentAiConfig: () => {},
         getHandlers: () => (({ [auditType]: {} })),
         getImports: () => [],
         getFetchConfig: () => {},
+        getBrandConfig: () => ({ brandId: 'test-brand' }),
       });
 
       const result = await auditsController.patchAuditForSite(context);
@@ -673,6 +685,7 @@ describe('Audits Controller', () => {
         ...handlerTypeConfig,
         getHandlerConfig: (type) => ({ [type]: handlerTypeConfig }),
         getSlackConfig: () => {},
+        getContentAiConfig: () => {},
         getHandlers: () => (({ [auditType]: {} })),
         getImports: () => [],
       });
@@ -710,6 +723,7 @@ describe('Audits Controller', () => {
         ...handlerTypeConfig,
         getHandlerConfig: (type) => ({ [type]: handlerTypeConfig }),
         getSlackConfig: () => {},
+        getContentAiConfig: () => {},
         getHandlers: () => (({ [auditType]: {} })),
         getImports: () => [],
       });
@@ -747,6 +761,7 @@ describe('Audits Controller', () => {
         ...handlerTypeConfig,
         getHandlerConfig: (type) => ({ [type]: handlerTypeConfig }),
         getSlackConfig: () => {},
+        getContentAiConfig: () => {},
         getHandlers: () => (({ [auditType]: {} })),
       });
 
@@ -784,6 +799,7 @@ describe('Audits Controller', () => {
         ...handlerTypeConfig,
         getHandlerConfig: (type) => ({ [type]: handlerTypeConfig }),
         getSlackConfig: () => {},
+        getContentAiConfig: () => {},
         getHandlers: () => (({ [auditType]: {} })),
       });
 
@@ -806,9 +822,11 @@ describe('Audits Controller', () => {
           getGroupedURLs: sandbox.stub(),
           updateGroupedURLs: sandbox.stub(),
           getSlackConfig: () => {},
+          getContentAiConfig: () => {},
           getHandlers: () => {},
           getImports: () => {},
           getFetchConfig: () => {},
+          getBrandConfig: () => ({ brandId: 'test-brand' }),
         };
 
         site.getConfig = () => siteConfig;

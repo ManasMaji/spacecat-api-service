@@ -56,6 +56,7 @@ import { multipartFormData } from './support/multipart-form-data.js';
 import ApiKeyController from './controllers/api-key.js';
 import OpportunitiesController from './controllers/opportunities.js';
 import SuggestionsController from './controllers/suggestions.js';
+import BrandsController from './controllers/brands.js';
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -102,7 +103,8 @@ async function run(request, context) {
       ApiKeyController(context),
       SitesAuditsToggleController(context.dataAccess),
       OpportunitiesController(context.dataAccess),
-      SuggestionsController(context.dataAccess),
+      SuggestionsController(context.dataAccess, context.sqs, context.env),
+      BrandsController(context.dataAccess, log, context.env),
     );
 
     const routeMatch = matchPath(method, suffix, routeHandlers);

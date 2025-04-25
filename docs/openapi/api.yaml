@@ -75,12 +75,18 @@ paths:
     $ref: './organizations-api.yaml#/organizations'
   /organizations/{organizationId}:
     $ref: './organization-api.yaml#/organization'
+  /organizations/{organizationId}/brands:
+    $ref: './brands-api.yaml#/brands-for-organization'
   /organizations/{organizationId}/sites:
     $ref: './sites-api.yaml#/sites-for-organization'
   /organizations/by-ims-org-id/{imsOrgId}:
     $ref: './organization-api.yaml#/organization-by-ims-org-id'
   /organizations/by-ims-org-id/{imsOrgId}/slack-config:
     $ref: './organization-api.yaml#/organization-slack-config-by-ims-org-id'
+  /preflight/jobs:
+    $ref: './preflight-api.yaml#/preflight-jobs'
+  /preflight/jobs/{jobId}:
+    $ref: './preflight-api.yaml#/preflight-job-status'
   /scrape:
     $ref: './scrape-api.yaml#/scrape'
   /sites:
@@ -107,6 +113,8 @@ paths:
     $ref: './audit-api.yaml#/latest-audit-for-site'
   /sites/{siteId}/{auditType}:
     $ref: './audit-api.yaml#/update-handler-type-config-for-site'
+  /sites/{siteId}/brand-guidelines:
+    $ref: './brands-api.yaml#/brand-guidelines-by-site-id'
   /sites/{siteId}/opportunities:
     $ref: './site-opportunities.yaml#/site-opportunities'
   /sites/{siteId}/opportunities/by-status/{status}:
@@ -121,6 +129,8 @@ paths:
     $ref: './site-opportunities.yaml#/site-opportunity-suggestion'
   /sites/{siteId}/opportunities/{opportunityId}/suggestions/status:
     $ref: './site-opportunities.yaml#/site-opportunity-suggestions-status'
+  /sites/{siteId}/opportunities/{opportunityId}/suggestions/auto-fix:
+    $ref: './site-opportunities.yaml#/site-opportunity-suggestions-auto-fix'
   /sites/{siteId}/key-events:
     $ref: './key-events-api.yaml#/key-events'
   /sites/{siteId}/key-events/{keyEventId}:

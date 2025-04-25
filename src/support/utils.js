@@ -9,15 +9,13 @@
  * OF ANY KIND, either express or implied. See the License for the specific language
  * governing permissions and limitations under the License.
  */
-import { context as h2, h1 } from '@adobe/fetch';
 import { Site as SiteModel } from '@adobe/spacecat-shared-data-access';
+import { ImsPromiseClient } from '@adobe/spacecat-shared-ims-client';
 import URI from 'urijs';
-import { hasText } from '@adobe/spacecat-shared-utils';
-
-/* c8 ignore next 3 */
-export const { fetch } = process.env.HELIX_FETCH_FORCE_HTTP1
-  ? h1()
-  : h2();
+import { hasText, tracingFetch as fetch } from '@adobe/spacecat-shared-utils';
+import {
+  STATUS_BAD_REQUEST,
+} from '../utils/constants.js';
 
 /**
  * Checks if the url parameter "url" equals "ALL".
@@ -94,6 +92,20 @@ export const sendRunImportMessage = async (
   startDate,
   endDate,
   slackContext,
+});
+
+export const sendAutofixMessage = async (
+  sqs,
+  queueUrl,
+  opportunityId,
+  siteId,
+  suggestionIds,
+  promiseToken,
+) => sqs.sendMessage(queueUrl, {
+  opportunityId,
+  siteId,
+  suggestionIds,
+  promiseToken,
 });
 /* c8 ignore end */
 
@@ -221,7 +233,7 @@ export const triggerImportRun = async (
 export async function isHelixSite(url, edgeConfig = {}) {
   let resp;
   try {
-    resp = await fetch(url, { headers: { 'User-Agent': 'curl/7.88.1' } });
+    resp = await fetch(url);
   } catch (e) {
     return {
       isHelix: false,
@@ -311,3 +323,47 @@ export const wwwUrlResolver = (site) => {
   const uri = new URI(baseURL);
   return hasText(uri.subdomain()) ? baseURL.replace(/https?:\/\//, '') : baseURL.replace(/https?:\/\//, 'www.');
 };
+
+/**
+ * Get the IMS user token from the context.
+ * @param {object} context - The context of the request.
+ * @returns {string} imsUserToken - The IMS User access token.
+ * @throws {ErrorWithStatusCode} - If the Authorization header is missing.
+ */
+export function getImsUserToken(context) {
+  const authorizationHeader = context.pathInfo?.headers?.authorization;
+  const BEARER_PREFIX = 'Bearer ';
+  if (!hasText(authorizationHeader) || !authorizationHeader.startsWith(BEARER_PREFIX)) {
+    throw new ErrorWithStatusCode('Missing Authorization header', STATUS_BAD_REQUEST);
+  }
+  return authorizationHeader.substring(BEARER_PREFIX.length);
+}
+
+/**
+ * Get an IMS promise token from the authorization header in context.
+ * @param {object} context - The context of the request.
+ * @returns {Promise<{
+ *   promise_token: string,
+ *   expires_in: number,
+ *   token_type: string,
+ * }>} - The promise token response.
+ * @throws {ErrorWithStatusCode} - If the Authorization header is missing.
+ */
+export async function getCSPromiseToken(context) {
+  // get IMS promise token and attach to queue message
+  let userToken;
+  try {
+    userToken = await getImsUserToken(context);
+  } catch (e) {
+    throw new ErrorWithStatusCode('Missing Authorization header', STATUS_BAD_REQUEST);
+  }
+  const imsPromiseClient = ImsPromiseClient.createFrom(
+    context,
+    ImsPromiseClient.CLIENT_TYPE.EMITTER,
+  );
+
+  return imsPromiseClient.getPromiseToken(
+    userToken,
+    context.env?.AUTOFIX_CRYPT_SECRET && context.env?.AUTOFIX_CRYPT_SALT,
+  );
+}
